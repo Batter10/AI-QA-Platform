@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Q&A Platform</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Q&A Platform</h1>
+            <p>Upload documents and ask questions in any language</p>
+        </header>
+
+        <main>
+            <section class="upload-section">
+                <h2>Document Upload</h2>
+                <div class="upload-area" id="dropZone">
+                    <input type="file" id="fileInput" accept=".txt,.pdf,.doc,.docx">
+                    <label for="fileInput">
+                        <span class="icon">📄</span>
+                        <span>Drop files here or click to upload</span>
+                    </label>
+                </div>
+                <div id="uploadStatus"></div>
+            </section>
+
+            <section class="qa-section">
+                <h2>Ask Questions</h2>
+                <div class="model-selection">
+                    <label for="modelSelect">Select AI Model:</label>
+                    <select id="modelSelect">
+                        <option value="llama">Llama</option>
+                        <option value="deepseek">DeepSeek</option>
+                    </select>
+                </div>
+
+                <div class="question-input">
+                    <textarea id="questionInput" placeholder="Type your question here..."></textarea>
+                    <button id="submitQuestion" class="primary-button">Ask Question</button>
+                </div>
+
+                <div class="answer-section">
+                    <h3>Answer</h3>
+                    <div id="answerOutput" class="answer-box"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            let currentFilePath = null;
+
+            // File upload handling
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+            const uploadStatus = document.getElementById('uploadStatus');
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                await handleFileUpload(file);
+            });
+
+            fileInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                await handleFileUpload(file);
+            });
+
+            async function handleFileUpload(file) {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const response = await fetch('http://localhost:5000/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+                    
+                    if (data.filepath) {
+                        currentFilePath = data.filepath;
+                        uploadStatus.innerHTML = `<span class="success">✓ File uploaded successfully</span>`;
+                    } else {
+                        uploadStatus.innerHTML = `<span class="error">× Upload failed: ${data.error}</span>`;
+                    }
+                } catch (error) {
+                    uploadStatus.innerHTML = `<span class="error">× Upload failed: ${error.message}</span>`;
+                }
+            }
+
+            // Question handling
+            const submitButton = document.getElementById('submitQuestion');
+            const questionInput = document.getElementById('questionInput');
+            const modelSelect = document.getElementById('modelSelect');
+            const answerOutput = document.getElementById('answerOutput');
+
+            submitButton.addEventListener('click', async () => {
+                if (!currentFilePath) {
+                    alert('Please upload a document first');
+                    return;
+                }
+
+                const question = questionInput.value.trim();
+                if (!question) {
+                    alert('Please enter a question');
+                    return;
+                }
+
+                submitButton.disabled = true;
+                answerOutput.innerHTML = 'Processing...';
+
+                try {
+                    const response = await fetch('http://localhost:5000/ask', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            filepath: currentFilePath,
+                            question: question,
+                            model: modelSelect.value
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.answer) {
+                        answerOutput.innerHTML = `<p>${data.answer}</p>`;
+                        if (data.language) {
+                            answerOutput.innerHTML += `<small>Detected language: ${data.language}</small>`;
+                        }
+                    } else {
+                        answerOutput.innerHTML = `<span class="error">Error: ${data.error}</span>`;
+                    }
+                } catch (error) {
+                    answerOutput.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+                } finally {
+                    submitButton.disabled = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
